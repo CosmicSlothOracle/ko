@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOSGE - Banner Teilnahme</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #D9C2A3;
+            --secondary-color: #E67E22;
+            --accent-color: #8E44AD;
+            --background-color: #FFF6E6;
+            --text-color: #2c3e50;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--background-color);
+            margin: 0;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .form-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 2rem;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h2 {
+            color: var(--secondary-color);
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        button {
+            width: 100%;
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.8rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #d35400;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 1.5rem;
+            padding: 0.8rem;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .error {
+            background-color: #fee;
+            color: #e74c3c;
+        }
+
+        .success {
+            background-color: #efe;
+            color: #27ae60;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Preview section */
+        .banner-preview {
+            margin-bottom: 1.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .banner-preview img {
+            width: 100%;
+            display: block;
+        }
+
+        .banner-info {
+            padding: 0.8rem;
+            background-color: #f8f9fa;
+            border-top: 1px solid #ddd;
+        }
+
+        .banner-info h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>Teilnahmeformular</h2>
+        <div id="banner-preview" class="banner-preview">
+            <img id="selected-banner" alt="Ausgewähltes Banner">
+            <div class="banner-info">
+                <h3 id="banner-title">Banner Name</h3>
+            </div>
+        </div>
+        <form id="participation-form" autocomplete="off">
+            <div class="form-group">
+                <label for="name">Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">E-Mail (optional)</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <div class="form-group">
+                <label for="message">Nachricht (optional)</label>
+                <textarea id="message" name="message"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="banner">Banner auswählen</label>
+                <select id="banner" name="banner">
+                    <option value="">-- Bitte wählen --</option>
+                </select>
+            </div>
+            <button type="submit" id="submit-btn">Teilnehmen</button>
+        </form>
+        <div class="message" id="form-message" style="display: none;"></div>
+        <a href="index.html" class="back-link">Zurück zur Hauptseite</a>
+    </div>
+    <script>
+        // Elements
+        const form = document.getElementById('participation-form');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const messageInput = document.getElementById('message');
+        const bannerSelect = document.getElementById('banner');
+        const submitBtn = document.getElementById('submit-btn');
+        const messageDiv = document.getElementById('form-message');
+        const bannerPreview = document.getElementById('banner-preview');
+        const selectedBanner = document.getElementById('selected-banner');
+        const bannerTitle = document.getElementById('banner-title');
+
+        // Load banners from localStorage
+        function loadBanners() {
+            const banners = JSON.parse(localStorage.getItem('banners') || '[]');
+
+            // Clear existing options (except the default one)
+            while (bannerSelect.options.length > 1) {
+                bannerSelect.remove(1);
+            }
+
+            // Add options for each banner
+            banners.forEach(banner => {
+                const option = document.createElement('option');
+                option.value = banner.id;
+                option.textContent = `Banner ${banner.id}`;
+                option.dataset.url = banner.url;
+                bannerSelect.appendChild(option);
+            });
+
+            // If we have no banners, add a default option
+            if (banners.length === 0) {
+                const defaultBanners = [
+                    {
+                        id: "1",
+                        url: "https://link.storjshare.io/raw/jug4nxwemak2ghsh2f7y4pizhhpa/geko/selec17.jpeg"
+                    },
+                    {
+                        id: "2",
+                        url: "https://link.storjshare.io/raw/juxxxawxv2vxznf45f63qkpi5syq/geko/selec6.jpeg"
+                    },
+                    {
+                        id: "3",
+                        url: "https://link.storjshare.io/raw/jua2vpfy32xr4zjznyeze3mpwnvq/geko/selec8.jpeg"
+                    },
+                    {
+                        id: "4",
+                        url: "https://link.storjshare.io/raw/jw5avo4flyazwn7rh4yqslrg24bq/geko/Selec1.jpeg"
+                    }
+                ];
+
+                defaultBanners.forEach(banner => {
+                    const option = document.createElement('option');
+                    option.value = banner.id;
+                    option.textContent = `Banner ${banner.id}`;
+                    option.dataset.url = banner.url;
+                    bannerSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Show banner preview when selected
+        bannerSelect.addEventListener('change', function() {
+            const selectedOption = bannerSelect.options[bannerSelect.selectedIndex];
+
+            if (selectedOption.value) {
+                const url = selectedOption.dataset.url;
+                const title = selectedOption.textContent;
+
+                selectedBanner.src = url;
+                bannerTitle.textContent = title;
+                bannerPreview.style.display = 'block';
+            } else {
+                bannerPreview.style.display = 'none';
+            }
+        });
+
+        // Form submission
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const name = nameInput.value.trim();
+            const email = emailInput.value.trim();
+            const message = messageInput.value.trim();
+            const banner = bannerSelect.value;
+
+            // Validation
+            if (!name) {
+                showMessage('Name ist erforderlich.', 'error');
+                return;
+            }
+
+            if (!banner) {
+                showMessage('Bitte wählen Sie ein Banner aus.', 'error');
+                return;
+            }
+
+            // Get existing participants
+            const participants = JSON.parse(localStorage.getItem('participants') || '[]');
+
+            // Add new participant
+            participants.push({
+                name: name,
+                email: email,
+                message: message,
+                banner: banner,
+                timestamp: new Date().toISOString()
+            });
+
+            // Save to localStorage
+            localStorage.setItem('participants', JSON.stringify(participants));
+
+            // Clear form
+            form.reset();
+            bannerPreview.style.display = 'none';
+
+            // Show success message
+            showMessage('Teilnahme erfolgreich übermittelt!', 'success');
+        });
+
+        // Helper to show messages
+        function showMessage(text, type) {
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+
+            // Scroll to message
+            messageDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBanners();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Language Path Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Language Path Configuration Test</h1>
+
+    <div class="test-section">
+        <h2>language_config.json configuration</h2>
+        <pre>
+{
+  "default_language": "de",
+  "available_languages": {
+    "de": {
+      "name": "deutsch",
+      "file": "index.html",
+      "flag": "🇩🇪"
+    },
+    "en": {
+      "name": "english",
+      "file": "lang/en.html",
+      "flag": "🇬🇧"
+    },
+    "tr": {
+      "name": "türkçe",
+      "file": "lang/tr.html",
+      "flag": "🇹🇷"
+    },
+    "ru": {
+      "name": "русский",
+      "file": "lang/ru.html",
+      "flag": "🇷🇺"
+    },
+    "ar": {
+      "name": "العربية",
+      "file": "lang/ar.html",
+      "flag": "🇸🇦"
+    },
+    "einfach": {
+      "name": "einfache sprache",
+      "file": "lang/einfach.html"
+    }
+  }
+}
+        </pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Language File Path Test</h2>
+        <p>Click on each language to see where it would redirect based on the configuration in each language file:</p>
+
+        <h3>From frontend/public/index.html (German):</h3>
+        <div>
+            <button onclick="testPath('de', '../index.html')">DE</button>
+            <button onclick="testPath('en', 'locales/en.html')">EN</button>
+            <button onclick="testPath('tr', 'locales/tr.html')">TR</button>
+            <button onclick="testPath('ru', 'locales/ru.html')">RU</button>
+            <button onclick="testPath('ar', 'locales/ar.html')">AR</button>
+            <button onclick="testPath('einfach', 'locales/einfach.html')">Einfach</button>
+        </div>
+
+        <h3>From frontend/locales/en.html (English):</h3>
+        <div>
+            <button onclick="testPath('de', '../index.html')">DE</button>
+            <button onclick="testPath('en', 'en.html')">EN</button>
+            <button onclick="testPath('tr', 'tr.html')">TR</button>
+            <button onclick="testPath('ru', 'ru.html')">RU</button>
+            <button onclick="testPath('ar', 'ar.html')">AR</button>
+            <button onclick="testPath('einfach', 'einfach.html')">Einfach</button>
+        </div>
+
+        <h3>From lang/en.html (as per config):</h3>
+        <div>
+            <button onclick="testPath('de', '../../index.html')">DE</button>
+            <button onclick="testPath('en', 'en.html')">EN</button>
+            <button onclick="testPath('tr', 'tr.html')">TR</button>
+            <button onclick="testPath('ru', 'ru.html')">RU</button>
+            <button onclick="testPath('ar', 'ar.html')">AR</button>
+            <button onclick="testPath('einfach', 'einfach.html')">Einfach</button>
+        </div>
+
+        <div id="result" class="result">Click a button to see the test result.</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Recommendation to Fix Path Inconsistency</h2>
+        <p>The language configuration in language_config.json uses paths with "lang/" prefix, but the HTML files have language switching implementations with direct relative paths.</p>
+        <p>Solution options:</p>
+        <ol>
+            <li>Update language_config.json to match the actual file locations without "lang/" prefix</li>
+            <li>OR ensure all HTML files use path configurations that match language_config.json</li>
+            <li>OR create symbolic links or redirects from the paths in language_config.json to the actual files</li>
+        </ol>
+    </div>
+
+    <script>
+        function testPath(language, path) {
+            const result = document.getElementById('result');
+            const configPath = language === 'de' ? 'index.html' : `lang/${language}.html`;
+            const actualLocation = new URL(path, window.location.href).href;
+
+            result.innerHTML = `
+                <strong>Language:</strong> ${language}<br>
+                <strong>Path in language_config.json:</strong> ${configPath}<br>
+                <strong>Path in HTML file:</strong> ${path}<br>
+                <strong>Would redirect to:</strong> ${actualLocation}<br>
+                <strong>Match:</strong> ${path.endsWith(configPath) ? 'Yes ✓' : 'No ✗'}
+            `;
+        }
+    </script>
+</body>
+</html>
