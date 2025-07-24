@@ -1,45 +1,67 @@
-Auflistung der Ordnerpfade f�r Volume Windows 
+Auflistung der Frontend-Ordnerpfade für Volume Windows
 Volumeseriennummer : D4B4-B5A2
-C:.
-|   index.html
-|   project_structure.txt
-|   README.md
-|   translation_validator.py
-|   
-+---.github
-|   \---workflows
-|           static.yml
-|           
-+---admin
-|       dashboard.html
-|       
-+---backend
-|       app.py
-|       requirements.txt
-|       
-+---css
-|       admin.css
-|       style.css
-|       
-+---frontend
-|       project_structure_frontend.txt
-|       
-+---img
-|       kosge_logo.svg
-|       
-+---js
-|       admin-dashboard.js
-|       admin.js
-|       main.js
-|       
-+---lang
-|       ar.html
-|       einfach.html
-|       en.html
-|       language_config.json
-|       ru.html
-|       tr.html
-|       
-\---translate_tool
-        translate_html.py
-        
+
+C:\USERS\SKANK\KO-1\FRONTEND
+│
+├── server.py                       # Frontend Development Server
+├── README.md                       # Frontend Dokumentation
+├── project_structure_frontend.txt  # Diese Datei
+│
+├── locales/                        # Lokalisierungsdateien
+│   ├── ar.html                     # Arabische Lokalisierung
+│   ├── einfach.html                # Einfache deutsche Lokalisierung
+│   ├── en.html                     # Englische Lokalisierung
+│   ├── language_config.json        # Sprachkonfiguration
+│   ├── ru.html                     # Russische Lokalisierung
+│   └── tr.html                     # Türkische Lokalisierung
+│
+├── translate_tool/                  # Übersetzungstools
+│   ├── translate_html.py           # HTML Übersetzungstool
+│   └── translation_validator.py    # Übersetzungsvalidierung
+│
+└── public/                         # Statische Frontend-Dateien
+    ├── index.html                  # Hauptseite (28KB, 488 Zeilen)
+    ├── teilnahme.html              # Teilnahme-Seite (10KB, 324 Zeilen)
+    ├── _redirects                  # Netlify Redirects
+    │
+    ├── admin/                      # Admin-Bereich
+    │   └── cms.html               # CMS Admin Interface
+    │
+    ├── css/                        # Stylesheets
+    │   ├── admin.css              # Admin Styles
+    │   └── style.css              # Hauptstyles
+    │
+    ├── img/                        # Bilder
+    │   └── kosge_logo.svg         # KOSGE Logo
+    │
+    ├── js/                         # JavaScript-Dateien
+    │   ├── admin-dashboard.js     # Admin Dashboard
+    │   ├── admin.js               # Admin Funktionalität
+    │   ├── config.js              # API Konfiguration
+    │   ├── logo-animation.js      # Logo Animation
+    │   └── main.js                # Haupt-JavaScript
+    │
+    └── locales/                    # Frontend Lokalisierung
+        ├── ar.html                 # Arabisch
+        ├── einfach.html            # Einfach Deutsch
+        ├── en.html                 # Englisch
+        ├── ru.html                 # Russisch
+        └── tr.html                 # Türkisch
+
+Frontend Features:
+├── Multi-Language Support (5 Sprachen)
+├── Responsive Design
+├── Admin Dashboard
+├── CMS Integration
+├── File Upload Interface
+├── Event Participation Forms
+├── Logo Animation
+├── Translation Tools
+├── Development Server
+└── Static Site Generation
+
+Deployment:
+├── Netlify (netlify.toml)
+├── Render (render.yaml)
+└── GitHub Actions (.github/workflows/)
+

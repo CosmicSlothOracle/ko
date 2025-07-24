@@ -127,16 +127,22 @@ class ContentManager:
         if content_hash in self.translation_memory.get(target_language, {}):
             translated_content = self.translation_memory[target_language][content_hash]
         else:
-            # Translate using Google Translator
-            translator = GoogleTranslator(source='de', target=target_language)
-            translated_content = translator.translate(
-                source_content['content'])
+            # Translate using Google Translator with error handling
+            try:
+                translator = GoogleTranslator(source='de', target=target_language)
+                translated_content = translator.translate(source_content['content'])
 
-            # Save to translation memory
-            if target_language not in self.translation_memory:
-                self.translation_memory[target_language] = {}
-            self.translation_memory[target_language][content_hash] = translated_content
-            self._save_translation_memory()
+                # Save to translation memory
+                if target_language not in self.translation_memory:
+                    self.translation_memory[target_language] = {}
+                self.translation_memory[target_language][content_hash] = translated_content
+                self._save_translation_memory()
+
+            except Exception as e:
+                # Handle rate limiting and API errors
+                print(f"Translation error for {target_language}: {str(e)}")
+                # Return original content if translation fails
+                translated_content = source_content['content']
 
         # Update metadata for translation
         metadata = source_content['metadata'].copy()

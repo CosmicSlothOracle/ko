@@ -1,42 +1,94 @@
-Auflistung der Ordnerpfade f�r Volume Windows 
+Auflistung der Ordnerpfade für Volume Windows
 Volumeseriennummer : D4B4-B5A2
-C:.
-|   index.html
-|   project_structure.txt
-|   README.md
-|   requirements.txt
-|   translation_validator.py
-|   
-+---.github
-|   \---workflows
-|           static.yml
-|           
-+---admin
-|       dashboard.html
-|       
-+---backend
-|       app.py
-|       
-+---css
-|       admin.css
-|       style.css
-|       
-+---img
-|       kosge_logo.svg
-|       
-+---js
-|       admin-dashboard.js
-|       admin.js
-|       main.js
-|       
-+---lang
-|       ar.html
-|       einfach.html
-|       en.html
-|       language_config.json
-|       ru.html
-|       tr.html
-|       
-\---translate_tool
-        translate_html.py
-        
+
+C:\USERS\SKANK\KO-1
+│
+├── app.py                          # Flask Backend Hauptanwendung
+├── cms.py                          # Content Management System
+├── config.py                       # Konfigurationsdatei
+├── requirements.txt                # Python Dependencies
+├── render.yaml                     # Render Deployment Konfiguration
+├── netlify.toml                   # Netlify Deployment Konfiguration
+├── participants.json               # Teilnehmerdaten
+├── README.md                       # Projektbeschreibung
+├── project_structure.txt           # Diese Datei
+├── project_structure_backend.txt   # Backend Struktur
+├── project_structure_frontend.txt  # Frontend Struktur
+│
+├── uploads/                        # Upload-Verzeichnis für Bilder
+│   ├── 1.png
+│   └── Pius_bf.png
+│
+├── content/                        # Content Management System
+│   ├── vision.json                 # Vision Konfiguration
+│   ├── de/                         # Deutsche Inhalte
+│   │   └── vision.md
+│   ├── en/                         # Englische Inhalte
+│   │   └── vision.md
+│   ├── tr/                         # Türkische Inhalte
+│   │   └── vision.md
+│   ├── ru/                         # Russische Inhalte
+│   │   └── vision.md
+│   └── ar/                         # Arabische Inhalte
+│       └── vision.md
+│
+├── frontend/                       # Frontend Anwendung
+│   ├── server.py                   # Frontend Development Server
+│   ├── README.md                   # Frontend Dokumentation
+│   ├── project_structure_frontend.txt
+│   │
+│   ├── locales/                    # Lokalisierungsdateien
+│   │   ├── ar.html
+│   │   ├── einfach.html
+│   │   ├── en.html
+│   │   ├── language_config.json
+│   │   ├── ru.html
+│   │   └── tr.html
+│   │
+│   ├── translate_tool/             # Übersetzungstools
+│   │   ├── translate_html.py
+│   │   └── translation_validator.py
+│   │
+│   └── public/                     # Statische Frontend-Dateien
+│       ├── index.html              # Hauptseite
+│       ├── teilnahme.html          # Teilnahme-Seite
+│       ├── _redirects              # Netlify Redirects
+│       │
+│       ├── admin/                  # Admin-Bereich
+│       │   └── cms.html
+│       │
+│       ├── css/                    # Stylesheets
+│       │   ├── admin.css
+│       │   └── style.css
+│       │
+│       ├── img/                    # Bilder
+│       │   └── kosge_logo.svg
+│       │
+│       ├── js/                     # JavaScript-Dateien
+│       │   ├── admin-dashboard.js
+│       │   ├── admin.js
+│       │   ├── config.js
+│       │   ├── logo-animation.js
+│       │   └── main.js
+│       │
+│       └── locales/                # Frontend Lokalisierung
+│           ├── ar.html
+│           ├── einfach.html
+│           ├── en.html
+│           ├── ru.html
+│           └── tr.html
+│
+├── .github/                        # GitHub CI/CD
+│   └── workflows/
+│       └── static.yml
+│
+└── .git/                           # Git Repository
+
+Test-Dateien:
+├── test_events_display.js
+├── test_language_paths.html
+└── test_language_switching.js
+
+Archiv-Dateien:
+└── geko-berlin-0f8aa7b3e956d803144ae29d9cabba761ff51042.zip
+

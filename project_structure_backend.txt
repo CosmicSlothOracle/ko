@@ -1,9 +1,77 @@
-Auflistung der Ordnerpfade f�r Volume Windows 
+Auflistung der Backend-Ordnerpfade für Volume Windows
 Volumeseriennummer : D4B4-B5A2
-C:\USERS\SKANK\KOSGE\BACKEND
-    app.py
-    project_structure_backend.txt
-    requirements.txt
-    
-Es sind keine Unterordner vorhanden 
+
+C:\USERS\SKANK\KO-1 (Backend Root)
+│
+├── app.py                          # Flask Hauptanwendung
+│   ├── API Endpoints:
+│   │   ├── /api/health            # Health Check
+│   │   ├── /api/login             # Admin Login
+│   │   ├── /api/banners           # Banner Upload/List/Delete
+│   │   ├── /api/uploads/<file>    # File Serving
+│   │   ├── /api/participants      # Teilnehmer CRUD
+│   │   └── /api/cms/content/<section> # CMS Endpoints
+│   │
+│   ├── CORS Konfiguration
+│   ├── File Upload Handling
+│   ├── Authentication (bcrypt)
+│   └── Error Handling
+│
+├── cms.py                          # Content Management System
+│   ├── ContentManager Klasse
+│   ├── Multi-Language Support
+│   ├── Markdown Processing
+│   ├── Translation Integration
+│   └── File-based Content Storage
+│
+├── config.py                       # Konfigurationsdatei
+│   ├── BASE_DIR, UPLOAD_FOLDER, PARTICIPANTS_FILE
+│   ├── CORS_ORIGINS Konfiguration
+│   ├── ADMIN_USER Credentials
+│   ├── SUPPORTED_LANGUAGES
+│   ├── File Upload Settings
+│   └── Directory Initialization
+│
+├── requirements.txt                # Python Dependencies
+│   ├── Flask==3.0.2
+│   ├── Flask-CORS==4.0.0
+│   ├── bcrypt==4.1.2
+│   ├── gunicorn==21.2.0
+│   ├── python-frontmatter==1.0.0
+│   ├── markdown==3.5.1
+│   ├── deep-translator==1.11.4
+│   └── Weitere Dependencies...
+│
+├── render.yaml                     # Render Deployment
+│   ├── Backend Service (kosge-backend)
+│   ├── Frontend Service (kos-frontend-kqxo)
+│   ├── Environment Variables
+│   ├── Build Commands
+│   └── Static File Headers
+│
+├── participants.json               # Teilnehmerdaten (JSON)
+│   └── Array von Teilnehmer-Objekten
+│
+├── uploads/                        # Upload-Verzeichnis
+│   ├── 1.png
+│   └── Pius_bf.png
+│
+└── content/                        # Content Management
+    ├── vision.json                 # Vision Konfiguration
+    ├── de/vision.md               # Deutsche Inhalte
+    ├── en/vision.md               # Englische Inhalte
+    ├── tr/vision.md               # Türkische Inhalte
+    ├── ru/vision.md               # Russische Inhalte
+    └── ar/vision.md               # Arabische Inhalte
+
+Backend Features:
+├── RESTful API mit Flask
+├── CORS Support für Frontend
+├── File Upload/Download
+├── Admin Authentication
+├── Content Management System
+├── Multi-Language Support
+├── Translation Services
+├── Health Check Endpoint
+└── Production Ready (Gunicorn)
 

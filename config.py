@@ -9,15 +9,11 @@ PARTICIPANTS_FILE = os.path.join(BASE_DIR, 'participants.json')
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# CORS Settings
+# CORS Settings - Netlify Frontend + Render Backend
 CORS_ORIGINS = [
-    "http://localhost:8000",
-    "http://localhost:8080",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:8080",
-    "https://kos-frontend-kqxo-kqxo.onrender.com",
-    "https://kosge.netlify.app",
-    "https://kosge.onrender.com"
+    "http://localhost:8000",  # Local development
+    "http://127.0.0.1:8000",  # Local development
+    "https://kosge.netlify.app",  # Production frontend (Netlify)
 ]
 
 # Authentication Settings

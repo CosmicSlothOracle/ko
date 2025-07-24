@@ -1,3 +1,6 @@
+from config import ALLOWED_EXTENSIONS
+from config import ADMIN_USER as DUMMY_USER
+from config import UPLOAD_FOLDER, PARTICIPANTS_FILE
 from flask import Flask, jsonify, request, send_from_directory, make_response, redirect
 from flask_cors import CORS
 import bcrypt
@@ -10,6 +13,8 @@ from config import (
     UPLOAD_FOLDER, PARTICIPANTS_FILE, ADMIN_USER,
     CORS_ORIGINS, MAX_CONTENT_LENGTH, init
 )
+from database import db_manager
+from bson.objectid import ObjectId
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -31,12 +36,8 @@ CORS(app, resources={
 content_manager = ContentManager(
     os.path.join(os.path.dirname(__file__), 'content'))
 
-# Get the absolute path of the current directory
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
-PARTICIPANTS_FILE = os.path.join(BASE_DIR, 'participants.json')
+# Import path constants from config
 
-logger.info(f'Base directory: {BASE_DIR}')
 logger.info(f'Upload folder: {UPLOAD_FOLDER}')
 
 # Create uploads directory if it doesn't exist
@@ -63,14 +64,7 @@ if os.path.exists(PARTICIPANTS_FILE):
 else:
     logger.warning('Participants file does not exist')
 
-# Dummy-User (später DB)
-DUMMY_USER = {
-    'username': 'admin',
-    # Passwort: 'kosge2024!' (bcrypt-hash)
-    'password_hash': b'$2b$12$ZCgWXzUdmVX.PnIfj4oeJOkX69Tu1rVZ51zGYe3kSloANnwMaTlBW'
-}
-
-ALLOWED_EXTENSIONS = {'png'}
+# Import admin user from config
 
 
 def add_cors_headers(response):
@@ -104,18 +98,15 @@ def allowed_file(filename):
 
 
 def load_participants():
-    if not os.path.exists(PARTICIPANTS_FILE):
-        return []
-    with open(PARTICIPANTS_FILE, 'r', encoding='utf-8') as f:
-        try:
-            return json.load(f)
-        except Exception:
-            return []
+    """Load participants from database or file"""
+    return db_manager.get_participants()
 
 
 def save_participants(participants):
-    with open(PARTICIPANTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(participants, f, ensure_ascii=False, indent=2)
+    """Save participants to database or file"""
+    # This function is kept for compatibility but uses database manager
+    for participant in participants:
+        db_manager.save_participant(participant)
 
 
 @app.route('/api/health', methods=['GET'])
@@ -126,10 +117,25 @@ def health():
         # Check if uploads directory exists
         uploads_exist = os.path.exists(UPLOAD_FOLDER)
 
+        # MongoDB connectivity check
+        mongo_connected = False
+        gridfs_available = False
+        if db_manager.connected:
+            try:
+                # Ping MongoDB
+                db_manager.client.admin.command("ping")
+                mongo_connected = True
+                # Check GridFS availability
+                gridfs_available = db_manager.fs is not None
+            except Exception as e:
+                logger.warning(f"MongoDB health check failed: {e}")
+
         return jsonify({
             'status': 'healthy',
             'participants_count': len(participants),
             'uploads_directory': uploads_exist,
+            'mongodb_connected': mongo_connected,
+            'gridfs_available': gridfs_available,
             'base_dir': BASE_DIR,
             'python_version': os.environ.get('PYTHON_VERSION', '3.11.11'),
             'environment': os.environ.get('FLASK_ENV', 'production')
@@ -164,36 +170,65 @@ def upload_banner():
         return jsonify({'error': 'No selected file'}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
+
+        # Prefer GridFS when available
+        if db_manager.connected:
+            try:
+                file_id = db_manager.store_file(file.read(), filename)
+                logger.info(
+                    f'Stored file {filename} in GridFS with id {file_id}')
+                url = f'/api/files/{file_id}'
+                return jsonify({'url': url, 'file_id': file_id, 'filename': filename}), 201
+            except Exception as e:
+                logger.error(f'Error saving file to GridFS: {str(e)}')
+                return jsonify({'error': f'Failed to save file to database: {str(e)}'}), 500
+
+        # --- Fallback: save to local disk ---
         save_path = os.path.join(UPLOAD_FOLDER, filename)
         logger.info(f'Saving file to: {save_path}')
         try:
+            file.seek(0)
             file.save(save_path)
-            logger.info(f'File saved successfully: {save_path}')
-            # Verify file exists after saving
-            if os.path.exists(save_path):
-                logger.info(f'File exists at: {save_path}')
-                logger.info(f'File size: {os.path.getsize(save_path)} bytes')
-            else:
-                logger.error(f'File not found after saving: {save_path}')
             url = f'/api/uploads/{filename}'
             return jsonify({'url': url, 'filename': filename}), 201
         except Exception as e:
             logger.error(f'Error saving file: {str(e)}')
             return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
+
     logger.error('Invalid file type')
     return jsonify({'error': 'Invalid file type. Only PNG allowed.'}), 400
 
 
 @app.route('/api/banners', methods=['GET'])
 def list_banners():
+    # Prefer GridFS when available
+    if db_manager.connected:
+        try:
+            files = db_manager.fs.find()
+            urls = [f'/api/files/{str(file._id)}' for file in files]
+            return jsonify({'banners': urls}), 200
+        except Exception as e:
+            logger.error(f'Error listing GridFS files: {str(e)}')
+            # fall through to disk fallback
+
     files = [f for f in os.listdir(UPLOAD_FOLDER) if allowed_file(f)]
     urls = [f'/api/uploads/{f}' for f in files]
     return jsonify({'banners': urls}), 200
 
 
-@app.route('/api/banners/<filename>', methods=['DELETE'])
-def delete_banner(filename):
-    filename = secure_filename(filename)
+@app.route('/api/banners/<identifier>', methods=['DELETE'])
+def delete_banner(identifier):
+    # If identifier looks like ObjectId (24 hex chars), attempt GridFS
+    if len(identifier) == 24 and db_manager.connected:
+        try:
+            result = db_manager.fs.delete(ObjectId(identifier))
+            return jsonify({'success': True, 'file_id': identifier}), 200
+        except Exception as e:
+            logger.error(f'Error deleting GridFS file: {str(e)}')
+            return jsonify({'error': 'File not found.'}), 404
+
+    # Otherwise treat as filename on disk
+    filename = secure_filename(identifier)
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if not allowed_file(filename):
         return jsonify({'error': 'Invalid file type.'}), 400
@@ -230,6 +265,22 @@ def uploaded_file(filename):
     except Exception as e:
         logger.error(f'Error serving file {filename}: {str(e)}')
         return jsonify({'error': f'Error serving file: {str(e)}'}), 500
+
+
+@app.route('/api/files/<file_id>')
+def get_file(file_id):
+    """Serve files stored in GridFS."""
+    if not db_manager.connected:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        grid_out = db_manager.fs.get(ObjectId(file_id))
+        data = grid_out.read()
+        response = make_response(data)
+        response.headers['Content-Type'] = 'image/png'
+        return response
+    except Exception as e:
+        logger.error(f'Error retrieving file {file_id}: {str(e)}')
+        return jsonify({'error': 'File not found'}), 404
 
 
 @app.route('/api/participants', methods=['POST'])

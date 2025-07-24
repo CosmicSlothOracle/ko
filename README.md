@@ -4,12 +4,21 @@ Website for Kollektiv für solidarische Gesundheit e.V. (KOSGE), a collective fo
 
 ## Features
 
-- Fully static website hosted on GitHub Pages
-- 4 Event Sections with editable images
-- Participant registration for each event
-- Persistent data storage using localStorage
+- Flask backend with MongoDB support
+- Content Management System (CMS) with multilingual support
+- Participant registration system
+- Image upload and management
 - Responsive design
-- Multilingual support
+- Admin authentication
+- Translation memory system
+
+## Recent Updates
+
+- **Architecture Cleanup**: Removed duplicate path definitions, centralized configuration
+- **MongoDB Ready**: Added pymongo and gridfs dependencies for database migration
+- **Error Handling**: Enhanced Google Translator error handling for rate limiting
+- **Security**: Added .gitignore and environment variable templates
+- **Containerization**: Added Dockerfile for local development
 
 ## Local Development
 
