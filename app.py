@@ -3,20 +3,23 @@ from flask_cors import CORS
 import bcrypt
 import os
 import json
+import re
 from werkzeug.utils import secure_filename
 from cms import ContentManager
 import logging
 from config import (
     UPLOAD_FOLDER, PARTICIPANTS_FILE, ADMIN_USER,
-    CORS_ORIGINS, MAX_CONTENT_LENGTH, init
+    CORS_ORIGINS, MAX_CONTENT_LENGTH, ALLOWED_EXTENSIONS, init
 )
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+# Configure logging based on environment
+log_level = logging.DEBUG if os.environ.get('FLASK_ENV') == 'development' else logging.INFO
+logging.basicConfig(level=log_level)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-# Configure CORS more explicitly
+
+# Configure CORS
 CORS(app, resources={
     r"/api/*": {
         "origins": CORS_ORIGINS,
@@ -33,8 +36,6 @@ content_manager = ContentManager(
 
 # Get the absolute path of the current directory
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
-PARTICIPANTS_FILE = os.path.join(BASE_DIR, 'participants.json')
 
 logger.info(f'Base directory: {BASE_DIR}')
 logger.info(f'Upload folder: {UPLOAD_FOLDER}')
@@ -63,15 +64,8 @@ if os.path.exists(PARTICIPANTS_FILE):
 else:
     logger.warning('Participants file does not exist')
 
-# Dummy-User (später DB)
-DUMMY_USER = {
-    'username': 'admin',
-    # Passwort: 'kosge2024!' (bcrypt-hash)
-    'password_hash': b'$2b$12$ZCgWXzUdmVX.PnIfj4oeJOkX69Tu1rVZ51zGYe3kSloANnwMaTlBW'
-}
-
-ALLOWED_EXTENSIONS = {'png'}
-
+# Email validation regex
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = request.headers.get(
@@ -106,16 +100,50 @@ def allowed_file(filename):
 def load_participants():
     if not os.path.exists(PARTICIPANTS_FILE):
         return []
-    with open(PARTICIPANTS_FILE, 'r', encoding='utf-8') as f:
-        try:
+    try:
+        with open(PARTICIPANTS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-        except Exception:
-            return []
+    except json.JSONDecodeError as e:
+        logger.error(f'JSON decode error in participants file: {e}')
+        return []
+    except Exception as e:
+        logger.error(f'Unexpected error loading participants: {e}')
+        return []
 
 
 def save_participants(participants):
-    with open(PARTICIPANTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(participants, f, ensure_ascii=False, indent=2)
+    try:
+        with open(PARTICIPANTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(participants, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f'Error saving participants: {e}')
+        raise
+
+
+def validate_email(email):
+    """Validate email format"""
+    if not email:
+        return True  # Email is optional
+    return bool(EMAIL_REGEX.match(email))
+
+
+def validate_participant_data(data):
+    """Validate participant data"""
+    errors = []
+    
+    name = data.get('name', '').strip()
+    if not name or len(name) < 2:
+        errors.append('Name must be at least 2 characters long')
+    
+    email = data.get('email', '').strip()
+    if email and not validate_email(email):
+        errors.append('Invalid email format')
+    
+    message = data.get('message', '').strip()
+    if message and len(message) > 1000:
+        errors.append('Message must be less than 1000 characters')
+    
+    return errors
 
 
 @app.route('/api/health', methods=['GET'])
@@ -144,13 +172,24 @@ def health():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    if username == DUMMY_USER['username'] and bcrypt.checkpw(password.encode(), DUMMY_USER['password_hash']):
-        # Dummy-Token (später JWT)
-        return jsonify({'token': 'dummy-token', 'user': username}), 200
-    return jsonify({'error': 'Invalid credentials'}), 401
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+            
+        if username == ADMIN_USER['username'] and bcrypt.checkpw(password.encode(), ADMIN_USER['password_hash']):
+            # Dummy-Token (später JWT)
+            return jsonify({'token': 'dummy-token', 'user': username}), 200
+        return jsonify({'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        logger.error(f'Login error: {e}')
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @app.route('/api/banners', methods=['POST'])
@@ -181,27 +220,35 @@ def upload_banner():
             logger.error(f'Error saving file: {str(e)}')
             return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
     logger.error('Invalid file type')
-    return jsonify({'error': 'Invalid file type. Only PNG allowed.'}), 400
+    return jsonify({'error': f'Invalid file type. Only {", ".join(ALLOWED_EXTENSIONS)} allowed.'}), 400
 
 
 @app.route('/api/banners', methods=['GET'])
 def list_banners():
-    files = [f for f in os.listdir(UPLOAD_FOLDER) if allowed_file(f)]
-    urls = [f'/api/uploads/{f}' for f in files]
-    return jsonify({'banners': urls}), 200
+    try:
+        files = [f for f in os.listdir(UPLOAD_FOLDER) if allowed_file(f)]
+        urls = [f'/api/uploads/{f}' for f in files]
+        return jsonify({'banners': urls}), 200
+    except Exception as e:
+        logger.error(f'Error listing banners: {e}')
+        return jsonify({'error': 'Failed to list banners'}), 500
 
 
 @app.route('/api/banners/<filename>', methods=['DELETE'])
 def delete_banner(filename):
-    filename = secure_filename(filename)
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    if not allowed_file(filename):
-        return jsonify({'error': 'Invalid file type.'}), 400
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        return jsonify({'success': True, 'filename': filename}), 200
-    else:
-        return jsonify({'error': 'File not found.'}), 404
+    try:
+        filename = secure_filename(filename)
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        if not allowed_file(filename):
+            return jsonify({'error': 'Invalid file type.'}), 400
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({'success': True, 'filename': filename}), 200
+        else:
+            return jsonify({'error': 'File not found.'}), 404
+    except Exception as e:
+        logger.error(f'Error deleting banner: {e}')
+        return jsonify({'error': 'Failed to delete banner'}), 500
 
 
 @app.route('/api/uploads/<filename>')
@@ -222,9 +269,13 @@ def uploaded_file(filename):
         # Use the add_cors_headers function
         response = add_cors_headers(response)
 
-        # Set content type for PNG files
+        # Set content type for image files
         if filename.lower().endswith('.png'):
             response.headers['Content-Type'] = 'image/png'
+        elif filename.lower().endswith(('.jpg', '.jpeg')):
+            response.headers['Content-Type'] = 'image/jpeg'
+        elif filename.lower().endswith('.gif'):
+            response.headers['Content-Type'] = 'image/gif'
 
         return response
     except Exception as e:
@@ -234,23 +285,35 @@ def uploaded_file(filename):
 
 @app.route('/api/participants', methods=['POST'])
 def add_participant():
-    data = request.get_json()
-    name = data.get('name')
-    email = data.get('email')
-    message = data.get('message')
-    banner = data.get('banner')
-    if not name:
-        return jsonify({'error': 'Name ist erforderlich.'}), 400
-    participant = {
-        'name': name,
-        'email': email,
-        'message': message,
-        'banner': banner
-    }
-    participants = load_participants()
-    participants.append(participant)
-    save_participants(participants)
-    return jsonify({'success': True, 'participant': participant}), 201
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        # Validate input data
+        validation_errors = validate_participant_data(data)
+        if validation_errors:
+            return jsonify({'error': 'Validation failed', 'details': validation_errors}), 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        message = data.get('message', '').strip()
+        banner = data.get('banner')
+        
+        participant = {
+            'name': name,
+            'email': email,
+            'message': message,
+            'banner': banner
+        }
+        
+        participants = load_participants()
+        participants.append(participant)
+        save_participants(participants)
+        return jsonify({'success': True, 'participant': participant}), 201
+    except Exception as e:
+        logger.error(f'Error adding participant: {e}')
+        return jsonify({'error': 'Failed to add participant'}), 500
 
 
 @app.route('/api/participants', methods=['GET'])
@@ -285,68 +348,98 @@ def create_options_response():
 # CMS Routes
 @app.route('/api/cms/content/<section>', methods=['GET'])
 def get_content(section):
-    language = request.args.get('language')
-    content = content_manager.get_content(section, language)
-    if content:
-        return jsonify(content), 200
-    return jsonify({'error': 'Content not found'}), 404
+    try:
+        language = request.args.get('language')
+        content = content_manager.get_content(section, language)
+        if content:
+            return jsonify(content), 200
+        return jsonify({'error': 'Content not found'}), 404
+    except Exception as e:
+        logger.error(f'Error getting content: {e}')
+        return jsonify({'error': 'Failed to get content'}), 500
 
 
 @app.route('/api/cms/content/<section>', methods=['POST'])
 def create_content(section):
-    data = request.get_json()
-    title = data.get('title')
-    content = data.get('content')
-    metadata = data.get('metadata', {})
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        title = data.get('title')
+        content = data.get('content')
+        metadata = data.get('metadata', {})
 
-    if not all([title, content]):
-        return jsonify({'error': 'Title and content are required'}), 400
+        if not all([title, content]):
+            return jsonify({'error': 'Title and content are required'}), 400
 
-    success = content_manager.create_content(section, title, content, metadata)
-    if success:
-        return jsonify({'success': True, 'section': section}), 201
-    return jsonify({'error': 'Failed to create content'}), 500
+        success = content_manager.create_content(section, title, content, metadata)
+        if success:
+            return jsonify({'success': True, 'section': section}), 201
+        return jsonify({'error': 'Failed to create content'}), 500
+    except Exception as e:
+        logger.error(f'Error creating content: {e}')
+        return jsonify({'error': 'Failed to create content'}), 500
 
 
 @app.route('/api/cms/content/<section>', methods=['PUT'])
 def update_content(section):
-    data = request.get_json()
-    content = data.get('content')
-    metadata = data.get('metadata', {})
-    language = data.get('language')
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        content = data.get('content')
+        metadata = data.get('metadata', {})
+        language = data.get('language')
 
-    if not content:
-        return jsonify({'error': 'Content is required'}), 400
+        if not content:
+            return jsonify({'error': 'Content is required'}), 400
 
-    success = content_manager.update_content(
-        section, content, metadata, language)
-    if success:
-        return jsonify({'success': True, 'section': section}), 200
-    return jsonify({'error': 'Failed to update content'}), 404
+        success = content_manager.update_content(
+            section, content, metadata, language)
+        if success:
+            return jsonify({'success': True, 'section': section}), 200
+        return jsonify({'error': 'Failed to update content'}), 404
+    except Exception as e:
+        logger.error(f'Error updating content: {e}')
+        return jsonify({'error': 'Failed to update content'}), 500
 
 
 @app.route('/api/cms/content/<section>/translate/<target_language>', methods=['POST'])
 def translate_content(section, target_language):
-    success = content_manager.translate_content(section, target_language)
-    if success:
-        return jsonify({'success': True, 'section': section, 'language': target_language}), 200
-    return jsonify({'error': 'Translation failed'}), 400
+    try:
+        success = content_manager.translate_content(section, target_language)
+        if success:
+            return jsonify({'success': True, 'section': section, 'language': target_language}), 200
+        return jsonify({'error': 'Translation failed'}), 400
+    except Exception as e:
+        logger.error(f'Error translating content: {e}')
+        return jsonify({'error': 'Translation failed'}), 500
 
 
 @app.route('/api/cms/sections', methods=['GET'])
 def list_sections():
-    language = request.args.get('language')
-    sections = content_manager.list_sections(language)
-    return jsonify({'sections': sections}), 200
+    try:
+        language = request.args.get('language')
+        sections = content_manager.list_sections(language)
+        return jsonify({'sections': sections}), 200
+    except Exception as e:
+        logger.error(f'Error listing sections: {e}')
+        return jsonify({'error': 'Failed to list sections'}), 500
 
 
 @app.route('/api/cms/content/<section>', methods=['DELETE'])
 def delete_content(section):
-    language = request.args.get('language')
-    success = content_manager.delete_content(section, language)
-    if success:
-        return jsonify({'success': True}), 200
-    return jsonify({'error': 'Content not found'}), 404
+    try:
+        language = request.args.get('language')
+        success = content_manager.delete_content(section, language)
+        if success:
+            return jsonify({'success': True}), 200
+        return jsonify({'error': 'Content not found'}), 404
+    except Exception as e:
+        logger.error(f'Error deleting content: {e}')
+        return jsonify({'error': 'Failed to delete content'}), 500
 
 
 # Add a root route that redirects to frontend or shows API status
