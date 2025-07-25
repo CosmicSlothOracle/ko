@@ -184,7 +184,14 @@
         <div class="message" id="form-message" style="display: none;"></div>
         <a href="index.html" class="back-link">Zurück zur Hauptseite</a>
     </div>
+    <script src="js/config.js"></script>
     <script>
+        // Get API configuration
+        const API_BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ||
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:10000/api'
+                : 'https://kosge-backend.onrender.com/api');
+
         // Elements
         const form = document.getElementById('participation-form');
         const nameInput = document.getElementById('name');
@@ -263,7 +270,7 @@
         });
 
         // Form submission
-        form.addEventListener('submit', function(e) {
+        form.addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const name = nameInput.value.trim();
@@ -282,27 +289,35 @@
                 return;
             }
 
-            // Get existing participants
-            const participants = JSON.parse(localStorage.getItem('participants') || '[]');
+            // Submit to backend API
+            try {
+                const response = await fetch(`${API_BASE_URL}/participants`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        message: message,
+                        banner: banner
+                    })
+                });
 
-            // Add new participant
-            participants.push({
-                name: name,
-                email: email,
-                message: message,
-                banner: banner,
-                timestamp: new Date().toISOString()
-            });
+                const data = await response.json();
 
-            // Save to localStorage
-            localStorage.setItem('participants', JSON.stringify(participants));
-
-            // Clear form
-            form.reset();
-            bannerPreview.style.display = 'none';
-
-            // Show success message
-            showMessage('Teilnahme erfolgreich übermittelt!', 'success');
+                if (response.ok && data.success) {
+                    // Clear form
+                    form.reset();
+                    bannerPreview.style.display = 'none';
+                    showMessage('Teilnahme erfolgreich übermittelt!', 'success');
+                } else {
+                    showMessage('Fehler beim Speichern: ' + (data.error || 'Unbekannter Fehler'), 'error');
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+                showMessage('Netzwerkfehler beim Speichern!', 'error');
+            }
         });
 
         // Helper to show messages

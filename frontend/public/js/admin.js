@@ -1,9 +1,10 @@
 // Admin Authentication - now handled by backend
 
-// API URL Configuration
-const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:10000/api'
-    : 'https://kosge-backend.onrender.com/api';
+// Use centralized configuration with fallback
+const API_BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ||
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:10000/api'
+        : 'https://kosge-backend.onrender.com/api');
 
 // DOM Elements
 const adminLoginModal = document.getElementById('admin-login-modal');

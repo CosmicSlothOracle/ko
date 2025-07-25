@@ -1,5 +1,12 @@
-// Get configuration from global config
-const { API_BASE_URL, MAX_RETRIES, RETRY_DELAY, DEBUG } = window.APP_CONFIG;
+// Get configuration from global config with fallback
+const { API_BASE_URL, MAX_RETRIES, RETRY_DELAY, DEBUG } = window.APP_CONFIG || {
+    API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:10000/api'
+        : 'https://kosge-backend.onrender.com/api',
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 1000,
+    DEBUG: false
+};
 
 // DOM Elements
 const eventsGrid = document.querySelector('.events-grid');
