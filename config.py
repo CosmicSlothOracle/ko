@@ -10,7 +10,7 @@ PARTICIPANTS_FILE = os.path.join(BASE_DIR, 'participants.json')
 MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB default
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# CORS Settings
+# CORS Settings - Updated with correct URLs
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else [
     "http://localhost:8000",
     "http://localhost:8080",
@@ -18,7 +18,10 @@ CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('
     "http://127.0.0.1:8080",
     "https://kos-frontend-kqxo-kqxo.onrender.com",
     "https://kosge.netlify.app",
-    "https://kosge.onrender.com"
+    "https://kosge.onrender.com",
+    "https://kosge-frontend.onrender.com",
+    "https://kosge-berlin.de",
+    "https://www.kosge-berlin.de"
 ]
 
 # Authentication Settings
@@ -42,6 +45,13 @@ DEBUG = os.environ.get('FLASK_ENV') == 'development'
 # Logging Settings
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# Event Limits
+EVENT_LIMITS = {
+    'max_participants_per_event': int(os.environ.get('MAX_PARTICIPANTS_PER_EVENT', 100)),
+    'max_events_per_user': int(os.environ.get('MAX_EVENTS_PER_USER', 5)),
+    'max_file_size_mb': int(os.environ.get('MAX_FILE_SIZE_MB', 16))
+}
 
 def init_directories():
     """Initialize required directories"""

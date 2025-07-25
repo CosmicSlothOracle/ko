@@ -1,34 +1,49 @@
 {
   "default_language": "de",
+  "base_path": "/locales",
   "available_languages": {
     "de": {
       "name": "deutsch",
-      "file": "../public/index.html",
-      "flag": "🇩🇪"
+      "file": "de.html",
+      "flag": "🇩🇪",
+      "direction": "ltr"
     },
     "en": {
       "name": "english",
       "file": "en.html",
-      "flag": "🇬🇧"
+      "flag": "🇬🇧",
+      "direction": "ltr"
     },
     "tr": {
       "name": "türkçe",
       "file": "tr.html",
-      "flag": "🇹🇷"
+      "flag": "🇹🇷",
+      "direction": "ltr"
     },
     "ru": {
       "name": "русский",
       "file": "ru.html",
-      "flag": "🇷🇺"
+      "flag": "🇷🇺",
+      "direction": "ltr"
     },
     "ar": {
       "name": "العربية",
       "file": "ar.html",
-      "flag": "🇸🇦"
+      "flag": "🇸🇦",
+      "direction": "rtl"
     },
     "einfach": {
       "name": "einfache sprache",
-      "file": "einfach.html"
+      "file": "einfach.html",
+      "flag": "📝",
+      "direction": "ltr"
     }
+  },
+  "fallback_language": "de",
+  "supported_languages": ["de", "en", "tr", "ru", "ar", "einfach"],
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2024-01-01",
+    "maintainer": "KOSGE Team"
   }
 }

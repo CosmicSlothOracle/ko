@@ -1,15 +1,17 @@
-from flask import Flask, jsonify, request, send_from_directory, make_response, redirect
+from flask import Flask, jsonify, request, send_from_directory, make_response, redirect, session
 from flask_cors import CORS
 import bcrypt
 import os
 import json
 import re
+import secrets
+from datetime import datetime
 from werkzeug.utils import secure_filename
 from cms import ContentManager
 import logging
 from config import (
     UPLOAD_FOLDER, PARTICIPANTS_FILE, ADMIN_USER,
-    CORS_ORIGINS, MAX_CONTENT_LENGTH, ALLOWED_EXTENSIONS, init
+    CORS_ORIGINS, MAX_CONTENT_LENGTH, ALLOWED_EXTENSIONS, BASE_DIR, init
 )
 
 # Configure logging based on environment
@@ -32,10 +34,7 @@ CORS(app, resources={
 
 # Initialize CMS
 content_manager = ContentManager(
-    os.path.join(os.path.dirname(__file__), 'content'))
-
-# Get the absolute path of the current directory
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    os.path.join(BASE_DIR, 'content'))
 
 logger.info(f'Base directory: {BASE_DIR}')
 logger.info(f'Upload folder: {UPLOAD_FOLDER}')
@@ -66,6 +65,49 @@ else:
 
 # Email validation regex
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+# CSRF Protection
+def generate_csrf_token():
+    """Generate CSRF token for forms"""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+def validate_csrf_token(token):
+    """Validate CSRF token"""
+    return token == session.get('csrf_token')
+
+def require_csrf_token(f):
+    """Decorator to require CSRF token for POST requests"""
+    def decorated_function(*args, **kwargs):
+        if request.method == 'POST':
+            # Get token from header or form data
+            token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
+            
+            if not token:
+                logger.warning('CSRF token missing in request')
+                return jsonify({'error': 'CSRF token required'}), 403
+            
+            if not validate_csrf_token(token):
+                logger.warning('Invalid CSRF token in request')
+                return jsonify({'error': 'Invalid CSRF token'}), 403
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+# CSRF token endpoint
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    """Get CSRF token for forms"""
+    token = generate_csrf_token()
+    return jsonify({'csrf_token': token}), 200
+
+# Event limits configuration
+EVENT_LIMITS = {
+    'max_participants_per_event': int(os.environ.get('MAX_PARTICIPANTS_PER_EVENT', 100)),
+    'max_events_per_user': int(os.environ.get('MAX_EVENTS_PER_USER', 5)),
+    'max_file_size_mb': int(os.environ.get('MAX_FILE_SIZE_MB', 16))
+}
 
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = request.headers.get(
@@ -128,20 +170,186 @@ def validate_email(email):
 
 
 def validate_participant_data(data):
-    """Validate participant data"""
+    """Validate participant data with comprehensive rules"""
     errors = []
     
+    # Name validation
     name = data.get('name', '').strip()
-    if not name or len(name) < 2:
+    if not name:
+        errors.append('Name is required')
+    elif len(name) < 2:
         errors.append('Name must be at least 2 characters long')
+    elif len(name) > 100:
+        errors.append('Name must be less than 100 characters long')
+    elif not name.replace(' ', '').isalpha():
+        errors.append('Name should only contain letters and spaces')
     
+    # Email validation
     email = data.get('email', '').strip()
-    if email and not validate_email(email):
-        errors.append('Invalid email format')
+    if email:  # Email is optional
+        if not validate_email(email):
+            errors.append('Invalid email format')
+        elif len(email) > 254:
+            errors.append('Email address is too long')
     
+    # Message validation
     message = data.get('message', '').strip()
     if message and len(message) > 1000:
         errors.append('Message must be less than 1000 characters')
+    
+    # Banner validation
+    banner = data.get('banner')
+    if banner:
+        if not isinstance(banner, str):
+            errors.append('Banner must be a string')
+        elif len(banner) > 500:
+            errors.append('Banner URL is too long')
+        elif not banner.startswith(('http://', 'https://', '/')):
+            errors.append('Invalid banner URL format')
+    
+    # Event validation
+    event = data.get('event')
+    if event:
+        if not isinstance(event, str):
+            errors.append('Event must be a string')
+        elif len(event) > 100:
+            errors.append('Event name is too long')
+    
+    return errors
+
+
+def validate_participant_update(data, participant_id):
+    """Validate participant update data"""
+    errors = []
+    
+    # Check if participant exists
+    participants = load_participants()
+    if participant_id >= len(participants):
+        errors.append('Participant not found')
+        return errors
+    
+    # Validate update data
+    errors.extend(validate_participant_data(data))
+    
+    return errors
+
+
+def sanitize_participant_data(data):
+    """Sanitize participant data to prevent XSS and other attacks"""
+    import html
+    
+    sanitized = {}
+    
+    for key, value in data.items():
+        if isinstance(value, str):
+            # HTML escape to prevent XSS
+            sanitized[key] = html.escape(value.strip())
+        else:
+            sanitized[key] = value
+    
+    return sanitized
+
+
+def check_participant_limits():
+    """Check if participant limits are reached"""
+    participants = load_participants()
+    max_participants = EVENT_LIMITS['max_participants_per_event']
+    
+    if len(participants) >= max_participants:
+        return False, f'Event is full. Maximum {max_participants} participants allowed.'
+    
+    return True, None
+
+
+def validate_file_upload(file):
+    """Validate file upload"""
+    errors = []
+    
+    if not file:
+        errors.append('No file provided')
+        return errors
+    
+    # Check file size
+    max_size = EVENT_LIMITS['max_file_size_mb'] * 1024 * 1024  # Convert to bytes
+    if file.content_length and file.content_length > max_size:
+        errors.append(f'File size exceeds maximum limit of {EVENT_LIMITS["max_file_size_mb"]}MB')
+    
+    # Check file type
+    if not allowed_file(file.filename):
+        errors.append(f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}')
+    
+    # Check filename
+    if file.filename:
+        if len(file.filename) > 255:
+            errors.append('Filename is too long')
+        elif not file.filename.replace('.', '').replace('-', '').replace('_', '').isalnum():
+            errors.append('Filename contains invalid characters')
+    
+    return errors
+
+
+def validate_password(password):
+    """Validate password strength with comprehensive rules"""
+    errors = []
+    
+    if not password:
+        errors.append('Password is required')
+        return errors
+    
+    # Length validation
+    if len(password) < 8:
+        errors.append('Password must be at least 8 characters long')
+    elif len(password) > 128:
+        errors.append('Password must be less than 128 characters long')
+    
+    # Character type validation
+    if not any(c.isupper() for c in password):
+        errors.append('Password must contain at least one uppercase letter')
+    
+    if not any(c.islower() for c in password):
+        errors.append('Password must contain at least one lowercase letter')
+    
+    if not any(c.isdigit() for c in password):
+        errors.append('Password must contain at least one number')
+    
+    # Special character validation (optional but recommended)
+    special_chars = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+    if not any(c in special_chars for c in password):
+        errors.append('Password should contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
+    
+    # Common password check
+    common_passwords = [
+        'password', '123456', '12345678', 'qwerty', 'abc123',
+        'password123', 'admin', 'letmein', 'welcome', 'monkey'
+    ]
+    if password.lower() in common_passwords:
+        errors.append('Password is too common, please choose a more secure password')
+    
+    # Sequential characters check
+    if len(password) >= 3:
+        for i in range(len(password) - 2):
+            if (password[i].isdigit() and password[i+1].isdigit() and password[i+2].isdigit() and
+                int(password[i+1]) == int(password[i]) + 1 and int(password[i+2]) == int(password[i+1]) + 1):
+                errors.append('Password should not contain sequential numbers')
+                break
+    
+    return errors
+
+
+def validate_password_change(old_password, new_password, confirm_password):
+    """Validate password change with additional checks"""
+    errors = []
+    
+    # Basic new password validation
+    errors.extend(validate_password(new_password))
+    
+    # Confirm password check
+    if new_password != confirm_password:
+        errors.append('New password and confirmation password do not match')
+    
+    # Old password check (if provided)
+    if old_password and old_password == new_password:
+        errors.append('New password must be different from the old password')
     
     return errors
 
@@ -160,7 +368,8 @@ def health():
             'uploads_directory': uploads_exist,
             'base_dir': BASE_DIR,
             'python_version': os.environ.get('PYTHON_VERSION', '3.11.11'),
-            'environment': os.environ.get('FLASK_ENV', 'production')
+            'environment': os.environ.get('FLASK_ENV', 'production'),
+            'event_limits': EVENT_LIMITS
         }), 200
     except Exception as e:
         logger.error(f'Health check failed: {str(e)}')
@@ -182,6 +391,11 @@ def login():
         
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
+        
+        # Validate password strength
+        password_errors = validate_password(password)
+        if password_errors:
+            return jsonify({'error': 'Password validation failed', 'details': password_errors}), 400
             
         if username == ADMIN_USER['username'] and bcrypt.checkpw(password.encode(), ADMIN_USER['password_hash']):
             # Dummy-Token (später JWT)
@@ -193,6 +407,7 @@ def login():
 
 
 @app.route('/api/banners', methods=['POST'])
+@require_csrf_token
 def upload_banner():
     if 'file' not in request.files:
         logger.error('No file part in request')
@@ -284,36 +499,130 @@ def uploaded_file(filename):
 
 
 @app.route('/api/participants', methods=['POST'])
+@require_csrf_token
 def add_participant():
     try:
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
             
+        # Sanitize input data
+        sanitized_data = sanitize_participant_data(data)
+        
         # Validate input data
-        validation_errors = validate_participant_data(data)
+        validation_errors = validate_participant_data(sanitized_data)
         if validation_errors:
             return jsonify({'error': 'Validation failed', 'details': validation_errors}), 400
         
-        name = data.get('name', '').strip()
-        email = data.get('email', '').strip()
-        message = data.get('message', '').strip()
-        banner = data.get('banner')
+        # Check event limits
+        can_add, limit_message = check_participant_limits()
+        if not can_add:
+            return jsonify({'error': limit_message}), 400
+        
+        name = sanitized_data.get('name', '').strip()
+        email = sanitized_data.get('email', '').strip()
+        message = sanitized_data.get('message', '').strip()
+        banner = sanitized_data.get('banner')
+        event = sanitized_data.get('event')
         
         participant = {
             'name': name,
             'email': email,
             'message': message,
-            'banner': banner
+            'banner': banner,
+            'event': event,
+            'timestamp': datetime.now().isoformat(),
+            'id': generate_participant_id()
         }
         
         participants = load_participants()
         participants.append(participant)
         save_participants(participants)
+        
+        logger.info(f'New participant added: {name} ({email})')
         return jsonify({'success': True, 'participant': participant}), 201
     except Exception as e:
         logger.error(f'Error adding participant: {e}')
         return jsonify({'error': 'Failed to add participant'}), 500
+
+
+def generate_participant_id():
+    """Generate unique participant ID"""
+    import uuid
+    return str(uuid.uuid4())[:8]
+
+
+@app.route('/api/participants/<int:participant_id>', methods=['PUT'])
+def update_participant(participant_id):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate update data
+        validation_errors = validate_participant_update(data, participant_id)
+        if validation_errors:
+            return jsonify({'error': 'Validation failed', 'details': validation_errors}), 400
+        
+        # Sanitize input data
+        sanitized_data = sanitize_participant_data(data)
+        
+        participants = load_participants()
+        if participant_id >= len(participants):
+            return jsonify({'error': 'Participant not found'}), 404
+        
+        # Update participant
+        participants[participant_id].update(sanitized_data)
+        participants[participant_id]['updated_at'] = datetime.now().isoformat()
+        
+        save_participants(participants)
+        
+        logger.info(f'Participant updated: ID {participant_id}')
+        return jsonify({'success': True, 'participant': participants[participant_id]}), 200
+    except Exception as e:
+        logger.error(f'Error updating participant: {e}')
+        return jsonify({'error': 'Failed to update participant'}), 500
+
+
+@app.route('/api/participants/<int:participant_id>', methods=['DELETE'])
+def delete_participant(participant_id):
+    try:
+        participants = load_participants()
+        if participant_id >= len(participants):
+            return jsonify({'error': 'Participant not found'}), 404
+        
+        deleted_participant = participants.pop(participant_id)
+        save_participants(participants)
+        
+        logger.info(f'Participant deleted: ID {participant_id}')
+        return jsonify({'success': True, 'deleted_participant': deleted_participant}), 200
+    except Exception as e:
+        logger.error(f'Error deleting participant: {e}')
+        return jsonify({'error': 'Failed to delete participant'}), 500
+
+
+@app.route('/api/participants/stats', methods=['GET'])
+def get_participant_stats():
+    try:
+        participants = load_participants()
+        
+        stats = {
+            'total_participants': len(participants),
+            'max_participants': EVENT_LIMITS['max_participants_per_event'],
+            'available_slots': EVENT_LIMITS['max_participants_per_event'] - len(participants),
+            'events': {},
+            'recent_participants': participants[-10:] if participants else []
+        }
+        
+        # Count participants by event
+        for participant in participants:
+            event = participant.get('event', 'Unknown')
+            stats['events'][event] = stats['events'].get(event, 0) + 1
+        
+        return jsonify(stats), 200
+    except Exception as e:
+        logger.error(f'Error getting participant stats: {e}')
+        return jsonify({'error': 'Failed to get participant stats'}), 500
 
 
 @app.route('/api/participants', methods=['GET'])
@@ -360,6 +669,7 @@ def get_content(section):
 
 
 @app.route('/api/cms/content/<section>', methods=['POST'])
+@require_csrf_token
 def create_content(section):
     try:
         data = request.get_json()
@@ -383,6 +693,7 @@ def create_content(section):
 
 
 @app.route('/api/cms/content/<section>', methods=['PUT'])
+@require_csrf_token
 def update_content(section):
     try:
         data = request.get_json()
@@ -407,6 +718,7 @@ def update_content(section):
 
 
 @app.route('/api/cms/content/<section>/translate/<target_language>', methods=['POST'])
+@require_csrf_token
 def translate_content(section, target_language):
     try:
         success = content_manager.translate_content(section, target_language)
@@ -430,6 +742,7 @@ def list_sections():
 
 
 @app.route('/api/cms/content/<section>', methods=['DELETE'])
+@require_csrf_token
 def delete_content(section):
     try:
         language = request.args.get('language')
