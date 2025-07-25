@@ -52,7 +52,7 @@ class DatabaseManager:
 
     def get_participants(self):
         """Return all participants as list of dicts."""
-        if self.connected and self.db:
+        if self.connected and self.db is not None:
             participants = list(self.db.participants.find({}, {"_id": False}))
             logger.debug("Fetched %s participants from MongoDB",
                          len(participants))
@@ -73,7 +73,7 @@ class DatabaseManager:
 
     def save_participant(self, participant: dict):
         """Persist a single participant."""
-        if self.connected and self.db:
+        if self.connected and self.db is not None:
             self.db.participants.insert_one(participant)
             logger.debug("Saved participant to MongoDB: %s",
                          participant.get("email"))
@@ -91,7 +91,7 @@ class DatabaseManager:
 
     def store_file(self, file_obj, filename: str):
         """Store a file in GridFS. Returns the file_id or None if fallback."""
-        if self.connected and self.fs:
+        if self.connected and self.fs is not None:
             file_id = self.fs.put(file_obj, filename=filename)
             logger.debug("Stored file %s in GridFS with id %s",
                          filename, str(file_id))
@@ -102,7 +102,7 @@ class DatabaseManager:
 
     def retrieve_file(self, file_id, destination: str):
         """Retrieve a file from GridFS and write it to destination path."""
-        if self.connected and self.fs:
+        if self.connected and self.fs is not None:
             grid_out = self.fs.get(file_id)
             with open(destination, "wb") as f:
                 f.write(grid_out.read())
