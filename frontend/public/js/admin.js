@@ -1,6 +1,4 @@
-// Admin Authentication
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'kosge2024!';
+// Admin Authentication - now handled by backend
 
 // API URL Configuration
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -171,26 +169,47 @@ function updateUIForAdminStatus() {
     }
 }
 
-function handleAdminLogin(e) {
+async function handleAdminLogin(e) {
     e.preventDefault();
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
 
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        isAdminLoggedIn = true;
-        localStorage.setItem('adminLoggedIn', 'true');
-        adminLoginModal.style.display = 'none';
-        updateUIForAdminStatus();
-        alert('Successfully logged in!');
-        loadEvents(); // Reload events to show edit buttons
-    } else {
-        alert('Invalid credentials');
+    try {
+        const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Store JWT tokens
+            localStorage.setItem('accessToken', data.access_token);
+            localStorage.setItem('refreshToken', data.refresh_token);
+            localStorage.setItem('adminLoggedIn', 'true');
+
+            isAdminLoggedIn = true;
+            adminLoginModal.style.display = 'none';
+            updateUIForAdminStatus();
+            alert('Successfully logged in!');
+            loadEvents(); // Reload events to show edit buttons
+        } else {
+            alert(data.error || 'Login failed');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        alert('Network error during login');
     }
 }
 
 function handleLogout() {
     isAdminLoggedIn = false;
     localStorage.removeItem('adminLoggedIn');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     updateUIForAdminStatus();
     loadEvents(); // Reload events to hide edit buttons
 }
@@ -488,25 +507,88 @@ async function fetchAndShowParticipants(eventNumber) {
     if (!modal || !listDiv) return;
     listDiv.innerHTML = '<p>Lade Teilnehmer...</p>';
     modal.style.display = 'block';
+
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) {
+        listDiv.innerHTML = '<p>Nicht angemeldet. Bitte zuerst einloggen.</p>';
+        return;
+    }
+
     try {
-        const res = await fetch(`${API_BASE_URL}/participants`);
-        const data = await res.json();
-        if (!data.participants) throw new Error('Keine Teilnehmer gefunden');
-        // Filter by banner/section
-        const filtered = data.participants.filter(p => (p.banner || '1') === String(eventNumber));
-        if (filtered.length === 0) {
-            listDiv.innerHTML = '<p>Keine Teilnehmer für dieses Event.</p>';
+        const res = await fetch(`${API_BASE_URL}/participants`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        if (res.status === 401) {
+            // Token expired, try to refresh
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (refreshToken) {
+                const refreshResponse = await fetch(`${API_BASE_URL}/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    localStorage.setItem('accessToken', refreshData.access_token);
+                    localStorage.setItem('refreshToken', refreshData.refresh_token);
+
+                    // Retry the original request
+                    const retryRes = await fetch(`${API_BASE_URL}/participants`, {
+                        headers: {
+                            'Authorization': `Bearer ${refreshData.access_token}`
+                        }
+                    });
+
+                    if (retryRes.ok) {
+                        const data = await retryRes.json();
+                        displayParticipants(data, eventNumber, listDiv);
+                    } else {
+                        listDiv.innerHTML = '<p>Fehler beim Laden der Teilnehmer.</p>';
+                    }
+                } else {
+                    // Refresh failed, redirect to login
+                    handleLogout();
+                    listDiv.innerHTML = '<p>Session abgelaufen. Bitte erneut anmelden.</p>';
+                }
+            } else {
+                handleLogout();
+                listDiv.innerHTML = '<p>Session abgelaufen. Bitte erneut anmelden.</p>';
+            }
+        } else if (res.ok) {
+            const data = await res.json();
+            displayParticipants(data, eventNumber, listDiv);
         } else {
-            listDiv.innerHTML = filtered.map(p => `
-                <div class="participant-item${p.message ? ' has-message' : ''}${p.email ? ' has-email' : ''}">
-                    <strong>${p.name}</strong>
-                    ${p.email ? `<div><span class='detail-label'>E-Mail:</span> ${p.email}</div>` : ''}
-                    ${p.message ? `<div><span class='detail-label'>Nachricht:</span> ${p.message}</div>` : ''}
-                    ${p.timestamp ? `<div><small>${new Date(p.timestamp).toLocaleString('de-DE')}</small></div>` : ''}
-                </div>
-            `).join('');
+            listDiv.innerHTML = '<p>Fehler beim Laden der Teilnehmer.</p>';
         }
     } catch (e) {
         listDiv.innerHTML = `<p>Fehler beim Laden: ${e.message}</p>`;
+    }
+}
+
+function displayParticipants(data, eventNumber, listDiv) {
+    if (!data.participants) {
+        listDiv.innerHTML = '<p>Keine Teilnehmer gefunden</p>';
+        return;
+    }
+
+    // Filter by banner/section
+    const filtered = data.participants.filter(p => (p.banner || '1') === String(eventNumber));
+    if (filtered.length === 0) {
+        listDiv.innerHTML = '<p>Keine Teilnehmer für dieses Event.</p>';
+    } else {
+        listDiv.innerHTML = filtered.map(p => `
+            <div class="participant-item${p.message ? ' has-message' : ''}${p.email ? ' has-email' : ''}">
+                <strong>${p.name}</strong>
+                ${p.email ? `<div><span class='detail-label'>E-Mail:</span> ${p.email}</div>` : ''}
+                ${p.message ? `<div><span class='detail-label'>Nachricht:</span> ${p.message}</div>` : ''}
+                ${p.timestamp ? `<div><small>${new Date(p.timestamp).toLocaleString('de-DE')}</small></div>` : ''}
+            </div>
+        `).join('');
     }
 }

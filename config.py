@@ -10,18 +10,44 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # CORS Settings - Netlify Frontend + Render Backend
-CORS_ORIGINS = [
-    "http://localhost:8000",  # Local development
-    "http://127.0.0.1:8000",  # Local development
-    "https://kosge.netlify.app",  # Production frontend (Netlify)
-]
+
+
+def get_cors_origins():
+    """Get CORS origins from environment variable"""
+    cors_env = os.getenv('CORS_ORIGINS')
+    if cors_env:
+        return [origin.strip() for origin in cors_env.split(',')]
+
+    # Fallback for development
+    return [
+        "http://localhost:8000",  # Local development
+        "http://127.0.0.1:8000",  # Local development
+        "https://berlin-kosge.netlify.app",  # Production frontend (Netlify)
+        "https://kosge-backend.onrender.com",  # Production backend (Render)
+    ]
+
+
+CORS_ORIGINS = get_cors_origins()
 
 # Authentication Settings
-ADMIN_USER = {
-    'username': 'admin',
-    # Password: 'kosge2024!' (bcrypt-hash)
-    'password_hash': b'$2b$12$ZCgWXzUdmVX.PnIfj4oeJOkX69Tu1rVZ51zGYe3kSloANnwMaTlBW'
-}
+
+
+def get_admin_user():
+    """Get admin user from environment variables"""
+    username = os.getenv('ADMIN_USERNAME', 'admin')
+    password_hash = os.getenv('ADMIN_PASSWORD_HASH')
+
+    if not password_hash:
+        # Fallback for development - DO NOT USE IN PRODUCTION
+        password_hash = '$2b$12$ZCgWXzUdmVX.PnIfj4oeJOkX69Tu1rVZ51zGYe3kSloANnwMaTlBW'
+
+    return {
+        'username': username,
+        'password_hash': password_hash.encode() if isinstance(password_hash, str) else password_hash
+    }
+
+
+ADMIN_USER = get_admin_user()
 
 # Content Management Settings
 SUPPORTED_LANGUAGES = ['de', 'en', 'tr', 'ru', 'ar']

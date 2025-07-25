@@ -1,5 +1,5 @@
 from config import ALLOWED_EXTENSIONS
-from config import ADMIN_USER as DUMMY_USER
+from config import ADMIN_USER
 from config import UPLOAD_FOLDER, PARTICIPANTS_FILE
 from flask import Flask, jsonify, request, send_from_directory, make_response, redirect
 from flask_cors import CORS
@@ -15,6 +15,7 @@ from config import (
 )
 from database import db_manager
 from bson.objectid import ObjectId
+from jwt_utils import generate_tokens, jwt_required, refresh_token
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -153,13 +154,22 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    if username == DUMMY_USER['username'] and bcrypt.checkpw(password.encode(), DUMMY_USER['password_hash']):
-        # Dummy-Token (später JWT)
-        return jsonify({'token': 'dummy-token', 'user': username}), 200
+
+    if username == ADMIN_USER['username'] and bcrypt.checkpw(password.encode(), ADMIN_USER['password_hash']):
+        # Generate JWT tokens
+        tokens = generate_tokens(username)
+        return jsonify({
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token'],
+            'expires_in': tokens['expires_in'],
+            'user': username
+        }), 200
+
     return jsonify({'error': 'Invalid credentials'}), 401
 
 
 @app.route('/api/banners', methods=['POST'])
+@jwt_required
 def upload_banner():
     if 'file' not in request.files:
         logger.error('No file part in request')
@@ -217,6 +227,7 @@ def list_banners():
 
 
 @app.route('/api/banners/<identifier>', methods=['DELETE'])
+@jwt_required
 def delete_banner(identifier):
     # If identifier looks like ObjectId (24 hex chars), attempt GridFS
     if len(identifier) == 24 and db_manager.connected:
@@ -305,6 +316,7 @@ def add_participant():
 
 
 @app.route('/api/participants', methods=['GET'])
+@jwt_required
 def get_participants():
     try:
         participants = load_participants()
@@ -335,6 +347,7 @@ def create_options_response():
 
 # CMS Routes
 @app.route('/api/cms/content/<section>', methods=['GET'])
+@jwt_required
 def get_content(section):
     language = request.args.get('language')
     content = content_manager.get_content(section, language)
@@ -344,6 +357,7 @@ def get_content(section):
 
 
 @app.route('/api/cms/content/<section>', methods=['POST'])
+@jwt_required
 def create_content(section):
     data = request.get_json()
     title = data.get('title')
@@ -360,6 +374,7 @@ def create_content(section):
 
 
 @app.route('/api/cms/content/<section>', methods=['PUT'])
+@jwt_required
 def update_content(section):
     data = request.get_json()
     content = data.get('content')
@@ -377,6 +392,7 @@ def update_content(section):
 
 
 @app.route('/api/cms/content/<section>/translate/<target_language>', methods=['POST'])
+@jwt_required
 def translate_content(section, target_language):
     success = content_manager.translate_content(section, target_language)
     if success:
@@ -385,6 +401,7 @@ def translate_content(section, target_language):
 
 
 @app.route('/api/cms/sections', methods=['GET'])
+@jwt_required
 def list_sections():
     language = request.args.get('language')
     sections = content_manager.list_sections(language)
@@ -392,6 +409,7 @@ def list_sections():
 
 
 @app.route('/api/cms/content/<section>', methods=['DELETE'])
+@jwt_required
 def delete_content(section):
     language = request.args.get('language')
     success = content_manager.delete_content(section, language)
@@ -426,6 +444,26 @@ def index():
 @app.route('/favicon.ico')
 def favicon():
     return '', 204  # Return no content status
+
+
+# JWT Token refresh endpoint
+@app.route('/api/refresh', methods=['POST'])
+def refresh():
+    data = request.get_json()
+    refresh_token_value = data.get('refresh_token')
+
+    if not refresh_token_value:
+        return jsonify({'error': 'Refresh token is required'}), 400
+
+    tokens = refresh_token(refresh_token_value)
+    if not tokens:
+        return jsonify({'error': 'Invalid or expired refresh token'}), 401
+
+    return jsonify({
+        'access_token': tokens['access_token'],
+        'refresh_token': tokens['refresh_token'],
+        'expires_in': tokens['expires_in']
+    }), 200
 
 
 if __name__ == '__main__':

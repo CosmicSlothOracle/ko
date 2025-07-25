@@ -1,0 +1,16 @@
+Stack & Namenskonvention:
+
+React + TypeScript + Node.js (Express/Nest) oder Next.js.
+
+Files/Folders im kebab-case; Named Exports bevorzugen.
+GitHub
+
+Env & Secrets:
+
+Secrets nur über process.env; keine Hard-Codes.
+
+Testing:
+
+Unit-Tests für Business-Logic (Jest/Playwright).
+
+In CI: Coverage ≥ 80 %.

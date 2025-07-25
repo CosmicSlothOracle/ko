@@ -12,3 +12,4 @@ beautifulsoup4==4.13.0
 requests==2.31.0
 pymongo[srv]>=4.6.1
 python-magic==0.4.27
+PyJWT==2.8.0
