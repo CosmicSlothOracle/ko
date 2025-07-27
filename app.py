@@ -1,18 +1,18 @@
-from config import ALLOWED_EXTENSIONS, ADMIN_USER, UPLOAD_FOLDER, PARTICIPANTS_FILE, BASE_DIR
 from flask import Flask, jsonify, request, send_from_directory, make_response, redirect
 from flask_cors import CORS
 import bcrypt
 import os
 import json
 from werkzeug.utils import secure_filename
-from cms import ContentManager
 import logging
-from config import (
-    UPLOAD_FOLDER, PARTICIPANTS_FILE, ADMIN_USER,
-    CORS_ORIGINS, MAX_CONTENT_LENGTH, init
-)
-from database import db_manager
 from bson.objectid import ObjectId
+
+from config import (
+    ALLOWED_EXTENSIONS, ADMIN_USER, UPLOAD_FOLDER, PARTICIPANTS_FILE,
+    BASE_DIR, CORS_ORIGINS, MAX_CONTENT_LENGTH, init
+)
+from cms import ContentManager
+from database import db_manager
 from jwt_utils import generate_tokens, jwt_required, refresh_token
 
 # Configure logging
@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
 # Configure CORS more explicitly
 CORS(app, resources={
     r"/api/*": {
@@ -34,8 +35,6 @@ CORS(app, resources={
 # Initialize CMS
 content_manager = ContentManager(
     os.path.join(os.path.dirname(__file__), 'content'))
-
-# Import path constants from config
 
 logger.info(f'Upload folder: {UPLOAD_FOLDER}')
 
@@ -62,8 +61,6 @@ if os.path.exists(PARTICIPANTS_FILE):
             logger.error(f'Error reading participants file: {e}')
 else:
     logger.warning('Participants file does not exist')
-
-# Import admin user from config
 
 
 def add_cors_headers(response):
