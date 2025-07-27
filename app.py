@@ -240,7 +240,7 @@ def delete_banner(identifier):
     filename = secure_filename(identifier)
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if not allowed_file(filename):
-        return jsonify({'error': 'Invalid file type.'}), 400
+        return jsonify({'error': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
     if os.path.exists(file_path):
         os.remove(file_path)
         return jsonify({'success': True, 'filename': filename}), 200

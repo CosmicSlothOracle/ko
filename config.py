@@ -39,7 +39,7 @@ def get_admin_user():
 
     if not password_hash:
         # Fallback for development - DO NOT USE IN PRODUCTION
-        password_hash = '$2b$12$ZCgWXzUdmVX.PnIfj4oeJOkX69Tu1rVZ51zGYe3kSloANnwMaTlBW'
+        password_hash = '$2b$12$adwRmBSof8bRpwiTnhnr..a0fv4RVnF5GJOJ9H4hUCQpmYa.3SWc6'
 
     return {
         'username': username,
