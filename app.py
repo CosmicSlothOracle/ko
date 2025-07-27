@@ -1,6 +1,4 @@
-from config import ALLOWED_EXTENSIONS
-from config import ADMIN_USER
-from config import UPLOAD_FOLDER, PARTICIPANTS_FILE
+from config import ALLOWED_EXTENSIONS, ADMIN_USER, UPLOAD_FOLDER, PARTICIPANTS_FILE, BASE_DIR
 from flask import Flask, jsonify, request, send_from_directory, make_response, redirect
 from flask_cors import CORS
 import bcrypt
@@ -206,7 +204,7 @@ def upload_banner():
             return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
 
     logger.error('Invalid file type')
-    return jsonify({'error': 'Invalid file type. Only PNG allowed.'}), 400
+    return jsonify({'error': f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
 
 
 @app.route('/api/banners', methods=['GET'])
